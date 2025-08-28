@@ -8,6 +8,7 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include "_preference.h"
+#include "stock_data.h"
 
 // =====================
 // 引脚定义
@@ -30,9 +31,16 @@ const long interval = 60000; // 更新间隔（毫秒）
 bool _wifi_flag = false; // WiFi连接状态
 
 // =====================
+// 外部函数声明
+// =====================
+extern void si_stock_screen(const StockData& stockData);
+extern int si_screen_status();
+
+// =====================
 // 函数声明
 // =====================
-void fetchStockData();
+void fetchAndDisplayStockData();
+void displayMockStockData();
 void preSaveParamsCallback();
 void saveParamsCallback();
 void setupWiFiManager();
@@ -40,52 +48,115 @@ void setupWiFiManager();
 // =====================
 // 函数实现
 // =====================
-// 获取股票数据
-void fetchStockData() {
+// 获取并显示股票数据
+void fetchAndDisplayStockData() {
   Preferences pref;
   pref.begin(PREF_NAMESPACE);
   String stockApiKey = pref.getString(PREF_STOCK_API_KEY);
   String stockCode = pref.getString(PREF_STOCK_CODE);
   pref.end();
 
+  StockData stockData;
+  stockData.isValid = false;
+
   if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("尝试获取真实股票数据...");
     HTTPClient http;
     String requestUrl = apiUrl;
     http.begin(requestUrl);
     int httpResponseCode = http.GET();
 
-    if (httpResponseCode > 0) {
+    if (httpResponseCode == 200) {
       String payload = http.getString();
-      Serial.println("HTTP Response code: " + String(httpResponseCode));
-      Serial.println("Response payload: " + payload);
+      Serial.println("HTTP Response: " + payload);
 
-      // 使用ArduinoJson解析JSON响应
-      const size_t capacity = JSON_OBJECT_SIZE(3) + 60; // 根据实际JSON结构调整容量
+      // 解析JSON响应
+      const size_t capacity = JSON_OBJECT_SIZE(10) + 1024;
       DynamicJsonDocument doc(capacity);
       DeserializationError error = deserializeJson(doc, payload);
 
       if (!error) {
-        // 提取字段并打印
-        JsonObject dapandata = doc["result"][0]["dapandata"].as<JsonObject>();
-        String name = dapandata["name"].as<String>();
-        String price = dapandata["dot"].as<String>();
-        String rate = dapandata["rate"].as<String>();
+        JsonObject result = doc["result"][0];
+        if (result.containsKey("dapandata")) {
+          JsonObject dapandata = result["dapandata"];
+          
+          stockData.name = dapandata["name"].as<String>();
+          stockData.code = stockCode;
+          stockData.price = dapandata["dot"].as<String>();
+          stockData.rate = dapandata["rate"].as<String>();
+          stockData.change = dapandata["diff"].as<String>();
+          stockData.open = dapandata["open"].as<String>();
+          stockData.high = dapandata["high"].as<String>();
+          stockData.low = dapandata["low"].as<String>();
+          stockData.volume = dapandata["volume"].as<String>();
+          stockData.time = "15:00:00";
+          stockData.isValid = true;
 
-        Serial.println("名称: " + name);
-        Serial.println("价格: " + price);
-        Serial.println("涨跌幅: " + rate + "%");
+          Serial.println("真实数据获取成功");
+        }
       } else {
-        Serial.println("JSON Parse Error: " + String(error.c_str()));
+        Serial.println("JSON解析失败: " + String(error.c_str()));
       }
     } else {
-      Serial.println("Error on HTTP request: " + String(httpResponseCode));
+      Serial.println("获取数据失败，HTTP状态码: " + String(httpResponseCode));
     }
     http.end();
   } else {
-    Serial.println("WiFi Disconnected");
+    Serial.println("WiFi未连接");
+  }
+
+  // 如果真实数据获取失败，使用模拟数据
+  if (!stockData.isValid) {
+    Serial.println("使用模拟股票数据");
+    stockData = generateMockStockData();
+  }
+
+  // 打印股票信息
+  printStockData(stockData);
+
+  // 在墨水屏上显示数据
+  Serial.println("开始在墨水屏上显示数据...");
+  si_stock_screen(stockData);
+
+  // 等待屏幕刷新完成
+  int timeout = 30; // 30秒超时
+  while (si_screen_status() == 0 && timeout > 0) {
+    delay(1000);
+    timeout--;
+    Serial.print(".");
+  }
+  
+  if (si_screen_status() == 1) {
+    Serial.println("屏幕更新完成！");
+  } else {
+    Serial.println("屏幕更新超时");
   }
 }
 
+// 显示模拟股票数据
+void displayMockStockData() {
+  Serial.println("显示模拟股票数据");
+  
+  StockData mockData = generateMockStockData();
+  printStockData(mockData);
+  
+  Serial.println("在墨水屏上显示模拟数据...");
+  si_stock_screen(mockData);
+
+  // 等待屏幕刷新完成
+  int timeout = 30;
+  while (si_screen_status() == 0 && timeout > 0) {
+    delay(1000);
+    timeout--;
+    Serial.print(".");
+  }
+  
+  if (si_screen_status() == 1) {
+    Serial.println("模拟数据显示完成！");
+  } else {
+    Serial.println("模拟数据显示超时");
+  }
+}
 // 保存参数前的回调
 void preSaveParamsCallback() {
   // 可在此处添加保存前的逻辑
@@ -165,12 +236,17 @@ void setup() {
     Serial.println("WiFi Connected!");
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
-    fetchStockData();
+    
+    // 初始显示股票数据（尝试真实数据，失败则使用模拟数据）
+    fetchAndDisplayStockData();
   } else {
     _wifi_flag = false;
     Serial.println("Failed to connect or config portal timeout.");
     WiFi.mode(WIFI_OFF);
     Serial.println("WiFi closed.");
+    
+    // 无WiFi连接时显示模拟数据
+    displayMockStockData();
   }
 }
 
@@ -181,7 +257,11 @@ void loop() {
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
     if (_wifi_flag && WiFi.status() == WL_CONNECTED) {
-      fetchStockData();
+      // 使用带显示功能的股票数据获取
+      fetchAndDisplayStockData();
+    } else {
+      // 无网络时显示模拟数据
+      displayMockStockData();
     }
   }
 }
