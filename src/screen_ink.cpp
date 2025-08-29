@@ -9,8 +9,9 @@
 // =====================
 // 宏定义
 // =====================
+#include "font.h"
 #define ROTATION 0
-
+#define FONT_TEXT u8g2_font_wqy16_t_gb2312 // 224825bytes，最大字库（天气描述中“霾”，只有此字库中有）
 // =====================
 // 全局变量
 // =====================
@@ -71,77 +72,39 @@ void draw_stock_data(const StockData& stockData) {
     Serial.println("[Screen] 开始绘制股票数据: " + stockData.name);
     
     display.setFullWindow();
-    display.fillScreen(GxEPD_WHITE);
+    display.fillScreen(GxEPD_WHITE);  // 白色背景
 
     // 设置基础字体样式
     u8g2Fonts.setFontMode(1);
     u8g2Fonts.setFontDirection(0);
-    u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+    u8g2Fonts.setBackgroundColor(GxEPD_WHITE);  // 白色背景
 
-    // 随便绘制几个字
-    u8g2Fonts.setFont(u8g2_font_ncenB18_tr);
+    // 绘制文字
+    u8g2Fonts.setFont(u8g2_font_ncenB18_tr);  // 使用支持ASCII的字体
+    u8g2Fonts.setForegroundColor(GxEPD_BLACK);  // 黑色前景色
+    u8g2Fonts.setCursor(10, 50);
+    u8g2Fonts.print("STOCK DATA");  // 先用英文测试
+    
+    // 添加股票信息
+    u8g2Fonts.setFont(u8g2_font_ncenB14_tr);
+    u8g2Fonts.setCursor(10, 80);
+    u8g2Fonts.print("Name: " + stockData.name);
+
+    u8g2Fonts.setFont(FONT_TEXT);
     u8g2Fonts.setForegroundColor(GxEPD_BLACK);
-    u8g2Fonts.setCursor(10, 30);
-    u8g2Fonts.print("股票数据");
+    u8g2Fonts.print(stockData.name);
+    
+    u8g2Fonts.setCursor(10, 110);
+    u8g2Fonts.print("Price: " + stockData.price);
+    
+    u8g2Fonts.setCursor(10, 140);
+    u8g2Fonts.print("Change: " + stockData.rate + "%");
 
-    // int y_pos = 25;
-    // int line_height = 25;
+    u8g2Fonts.setCursor(10, 170);
+    u8g2Fonts.print("Volume: " + stockData.volume);
 
-    // // 标题 - 使用大字体
-    // u8g2Fonts.setFont(u8g2_font_ncenB18_tr);
-    // u8g2Fonts.setForegroundColor(GxEPD_BLACK);
-    // u8g2Fonts.setCursor(10, y_pos);
-    // u8g2Fonts.print(stockData.name + " (" + stockData.code + ")");
-    // y_pos += line_height + 5;
-
-    // // 价格信息 - 使用中等字体
-    // u8g2Fonts.setFont(u8g2_font_ncenB14_tr);
-    
-    // // 当前价格 - 根据涨跌设置颜色
-    // float rateValue = stockData.rate.toFloat();
-    // if (rateValue > 0) {
-    //     u8g2Fonts.setForegroundColor(GxEPD_RED);  // 上涨用红色
-    // } else if (rateValue < 0) {
-    //     u8g2Fonts.setForegroundColor(GxEPD_BLACK); // 下跌用黑色
-    // } else {
-    //     u8g2Fonts.setForegroundColor(GxEPD_BLACK); // 平盘用黑色
-    // }
-    
-    // u8g2Fonts.setCursor(10, y_pos);
-    // u8g2Fonts.print("价格: " + stockData.price + " 元");
-    // y_pos += line_height;
-
-    // // 涨跌幅和涨跌额
-    // u8g2Fonts.setCursor(10, y_pos);
-    // String changeStr = (rateValue >= 0 ? "+" : "") + stockData.rate + "%";
-    // changeStr += " (" + String(rateValue >= 0 ? "+" : "") + stockData.change + ")";
-    // u8g2Fonts.print(changeStr);
-    // y_pos += line_height + 5;
-
-    // // 其他信息 - 使用小字体
-    // u8g2Fonts.setFont(u8g2_font_ncenB10_tr);
-    // u8g2Fonts.setForegroundColor(GxEPD_BLACK);
-    
-    // u8g2Fonts.setCursor(10, y_pos);
-    // u8g2Fonts.print("开盘: " + stockData.open);
-    // u8g2Fonts.setCursor(200, y_pos);
-    // u8g2Fonts.print("最高: " + stockData.high);
-    // y_pos += 18;
-    
-    // u8g2Fonts.setCursor(10, y_pos);
-    // u8g2Fonts.print("最低: " + stockData.low);
-    // u8g2Fonts.setCursor(200, y_pos);
-    // u8g2Fonts.print("成交量: " + stockData.volume);
-    // y_pos += 18;
-    
-    // // 更新时间
-    // u8g2Fonts.setCursor(10, y_pos);
-    // u8g2Fonts.print("更新时间: " + stockData.time);
-    
-    // // 在屏幕底部显示数据来源
-    // u8g2Fonts.setFont(u8g2_font_ncenB08_tr);
-    // u8g2Fonts.setCursor(10, display.height() - 10);
-    // u8g2Fonts.print("数据来源: 模拟数据");
+    u8g2Fonts.setCursor(10, 200);
+    u8g2Fonts.print("Time: " + stockData.time);
 
     // 刷新显示
     display.display();

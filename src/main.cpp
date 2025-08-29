@@ -9,6 +9,7 @@
 #include <ArduinoJson.h>
 #include "_preference.h"
 #include "stock_data.h"
+#include <time.h>
 
 // =====================
 // 引脚定义
@@ -25,7 +26,8 @@ WiFiManager wm;
 WiFiManagerParameter para_stock_api_key("stock_api_key", "api key", "", 64); // API Key
 WiFiManagerParameter para_stock_code("stock_code", "股票code", "", 32); // 股票代码
 
-String apiUrl = "http://web.juhe.cn/finance/stock/hs?key=87e463bjj90112bd44da4bc4154ad8544dda&gid=sh601009&type=";
+bool timeInitialized = false;
+String apiUrl = "http://web.juhe.cn/finance/stock/hs";
 unsigned long previousMillis = 0;
 const long interval = 60000; // 更新间隔（毫秒）
 bool _wifi_flag = false; // WiFi连接状态
@@ -44,10 +46,29 @@ void displayMockStockData();
 void preSaveParamsCallback();
 void saveParamsCallback();
 void setupWiFiManager();
+void formatCompleteTime();
 
 // =====================
 // 函数实现
 // =====================
+
+// 时间格式化函数
+String formatCompleteTime(const String& apiTime) {
+    if (!timeInitialized) {
+        return "2024-08-29 " + apiTime; // 备用方案
+    }
+    
+    time_t now;
+    struct tm timeinfo;
+    time(&now);
+    localtime_r(&now, &timeinfo);
+    
+    char dateStr[32];
+    strftime(dateStr, sizeof(dateStr), "%Y-%m-%d", &timeinfo);
+    
+    return String(dateStr) + " " + apiTime;
+}
+
 // 获取并显示股票数据
 void fetchAndDisplayStockData() {
   Preferences pref;
@@ -63,6 +84,7 @@ void fetchAndDisplayStockData() {
     Serial.println("尝试获取真实股票数据...");
     HTTPClient http;
     String requestUrl = apiUrl;
+    requestUrl += "?key=" + stockApiKey + "&gid=" + stockCode;
     http.begin(requestUrl);
     int httpResponseCode = http.GET();
 
@@ -77,19 +99,28 @@ void fetchAndDisplayStockData() {
 
       if (!error) {
         JsonObject result = doc["result"][0];
-        if (result.containsKey("dapandata")) {
+        if (result.containsKey("dapandata") &&result.containsKey("data")) {
           JsonObject dapandata = result["dapandata"];
+          JsonObject data = result["data"];
           
           stockData.name = dapandata["name"].as<String>();
           stockData.code = stockCode;
+          // 当前价格
           stockData.price = dapandata["dot"].as<String>();
+          // 涨跌幅
           stockData.rate = dapandata["rate"].as<String>();
-          stockData.change = dapandata["diff"].as<String>();
-          stockData.open = dapandata["open"].as<String>();
-          stockData.high = dapandata["high"].as<String>();
-          stockData.low = dapandata["low"].as<String>();
-          stockData.volume = dapandata["volume"].as<String>();
-          stockData.time = "15:00:00";
+          // 涨跌额
+          stockData.change = dapandata["nowPic"].as<String>();
+          // 开盘价
+          stockData.open = data["todayStartPri"].as<String>();
+          // 最高价
+          stockData.high = data["todayMax"].as<String>();
+          // 最低价
+          stockData.low = data["todayMin"].as<String>();
+          // 成交量
+          stockData.volume = dapandata["traNumber"].as<String>();
+          // 更新时间
+          stockData.time = formatCompleteTime(data["time"].as<String>());
           stockData.isValid = true;
 
           Serial.println("真实数据获取成功");
@@ -216,6 +247,10 @@ void setup() {
   delay(1000);
 
   WiFi.mode(WIFI_STA);
+
+  // 显式指定 SPI 引脚 (SCK=12, MOSI=11, CS=5)
+  SPI.begin(11, -1, 10, PIN_CS);
+
   wm.setHostname("keke-stock");
   wm.setEnableConfigPortal(true);
   wm.setConnectTimeout(30);
@@ -253,16 +288,17 @@ void setup() {
 void loop() {
   wm.process();
 
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {
-    previousMillis = currentMillis;
-    if (_wifi_flag && WiFi.status() == WL_CONNECTED) {
-      // 使用带显示功能的股票数据获取
-      fetchAndDisplayStockData();
-    } else {
-      // 无网络时显示模拟数据
-      displayMockStockData();
-    }
-  }
+  // 临时关闭定时更新功能
+  // unsigned long currentMillis = millis();
+  // if (currentMillis - previousMillis >= interval) {
+  //   previousMillis = currentMillis;
+  //   if (_wifi_flag && WiFi.status() == WL_CONNECTED) {
+  //     // 使用带显示功能的股票数据获取
+  //     fetchAndDisplayStockData();
+  //   } else {
+  //     // 无网络时显示模拟数据
+  //     displayMockStockData();
+  //   }
+  // }
 }
 

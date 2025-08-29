@@ -34,7 +34,7 @@ StockData generateMockStockData() {
     mockData.volume = String(random(1000, 50000)) + "万手";
     
     // 生成时间戳
-    mockData.time = "15:00:00";
+    mockData.time = "12:00:00";
     
     mockData.isValid = true;
     
@@ -57,7 +57,7 @@ void printStockData(const StockData& data) {
     Serial.println("开盘价: " + data.open + " 元");
     Serial.println("最高价: " + data.high + " 元");
     Serial.println("最低价: " + data.low + " 元");
-    Serial.println("成交量: " + data.volume);
+    Serial.println("成交量: " + data.volume + "手");
     Serial.println("更新时间: " + data.time);
     Serial.println("===============");
 }
